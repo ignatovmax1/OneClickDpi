@@ -14,8 +14,8 @@ public sealed record UpdateManifest(
 public sealed record UpdateRelease(
     Version Version,
     UpdateManifest Manifest,
-    byte[] ManifestBytes,
-    byte[] SignatureBytes,
+    byte[]? ManifestBytes,
+    byte[]? SignatureBytes,
     Uri PackageUri,
     Uri ReleasePageUri);
 

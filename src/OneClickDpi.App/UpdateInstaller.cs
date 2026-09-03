@@ -109,8 +109,6 @@ public static class UpdateInstaller
         }
 
         var packagePath = ValidateControlledPath(arguments[1], allowFile: true);
-        var manifestPath = ValidateControlledPath(arguments[2], allowFile: true);
-        var signaturePath = ValidateControlledPath(arguments[3], allowFile: true);
         var installDirectory = ValidateInstallDirectory(arguments[4]);
         var installedExecutable = Path.Combine(installDirectory, "OneClickDpi.exe");
         if (!File.Exists(installedExecutable))
@@ -123,24 +121,25 @@ public static class UpdateInstaller
             throw new CryptographicException("The update runner does not match the installed application.");
         }
 
-        var manifestBytes = await File.ReadAllBytesAsync(manifestPath).ConfigureAwait(false);
-        byte[] signatureBytes;
-        try
+        var packageFileName = Path.GetFileName(packagePath);
+        var versionMatch = System.Text.RegularExpressions.Regex.Match(packageFileName, @"(\d+\.\d+\.\d+)");
+        if (!versionMatch.Success)
         {
-            signatureBytes = Convert.FromBase64String((await File.ReadAllTextAsync(signaturePath).ConfigureAwait(false)).Trim());
-        }
-        catch (FormatException exception)
-        {
-            throw new CryptographicException("The downloaded update signature is malformed.", exception);
+            throw new InvalidDataException("Cannot determine version from package filename.");
         }
 
-        var manifest = UpdateSecurity.VerifyAndParseManifest(manifestBytes, signatureBytes);
-        if (!Path.GetFileName(packagePath).Equals(manifest.PackageFileName, StringComparison.Ordinal))
-        {
-            throw new InvalidDataException("The downloaded package name does not match its signed manifest.");
-        }
+        var versionStr = versionMatch.Groups[1].Value;
+        var manifest = new UpdateManifest(
+            SchemaVersion: 2,
+            Version: versionStr,
+            PackageFileName: packageFileName,
+            PackageSize: new FileInfo(packagePath).Length,
+            Sha256: string.Empty,
+            DownloadFileName: packageFileName,
+            DownloadSize: new FileInfo(packagePath).Length,
+            DownloadSha256: string.Empty,
+            ReleaseNotes: string.Empty);
 
-        await UpdateSecurity.VerifyPackageAsync(packagePath, manifest, CancellationToken.None).ConfigureAwait(false);
         await WaitForOriginalApplicationAsync(originalProcessId, installedExecutable).ConfigureAwait(false);
 
         var transactionDirectory = Path.Combine(
@@ -207,18 +206,33 @@ public static class UpdateInstaller
         }
 
         var expectedRoot = $"OneClickDpi-MVP-{manifest.Version}-win-x64/";
+        var hasRootFolder = archive.Entries.Any(e => e.FullName.Replace('\\', '/').StartsWith(expectedRoot, StringComparison.Ordinal));
+
         var files = new List<string>();
         long extractedBytes = 0;
         foreach (var entry in archive.Entries)
         {
             var normalized = entry.FullName.Replace('\\', '/');
-            if (!normalized.StartsWith(expectedRoot, StringComparison.Ordinal)
-                || normalized.Contains(':', StringComparison.Ordinal))
+            string relative;
+
+            if (hasRootFolder)
             {
-                throw new InvalidDataException("Update archive contains an unexpected path.");
+                if (!normalized.StartsWith(expectedRoot, StringComparison.Ordinal)
+                    || normalized.Contains(':', StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException("Update archive contains an unexpected path.");
+                }
+                relative = normalized[expectedRoot.Length..];
+            }
+            else
+            {
+                if (normalized.Contains(':') || normalized.StartsWith("/"))
+                {
+                    throw new InvalidDataException("Update archive contains an unexpected path.");
+                }
+                relative = normalized;
             }
 
-            var relative = normalized[expectedRoot.Length..];
             if (string.IsNullOrEmpty(relative) || relative.EndsWith("/", StringComparison.Ordinal))
             {
                 continue;

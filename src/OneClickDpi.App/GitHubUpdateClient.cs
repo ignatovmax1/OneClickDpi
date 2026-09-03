@@ -11,7 +11,7 @@ namespace OneClickDpi.App;
 
 public sealed class GitHubUpdateClient : IDisposable
 {
-    public const string Repository = "ignatovmax1/OneClickDpi-Updates";
+    public const string Repository = "ignatovmax1/OneClickDpi";
     private static readonly Uri DefaultLatestReleaseApi = new(
         $"https://api.github.com/repos/{Repository}/releases/latest");
     private static readonly string AllowedAssetApiPrefix =
@@ -39,8 +39,14 @@ public sealed class GitHubUpdateClient : IDisposable
                 disposeHandler: true)
             : new HttpClient(handler, disposeHandler: true);
         _client.Timeout = TimeSpan.FromMinutes(10);
-        _client.DefaultRequestHeaders.UserAgent.ParseAdd("OneClickDpi/0.6 updater");
+        _client.DefaultRequestHeaders.UserAgent.ParseAdd($"OneClickDpi/{GetVersion()} updater");
         _client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2026-03-10");
+    }
+
+    private static string GetVersion()
+    {
+        var v = typeof(GitHubUpdateClient).Assembly.GetName().Version;
+        return v is null ? "0.6" : $"{v.Major}.{v.Minor}";
     }
 
     public async Task<UpdateRelease?> CheckAsync(Version currentVersion, CancellationToken cancellationToken)
@@ -68,56 +74,62 @@ public sealed class GitHubUpdateClient : IDisposable
             return null;
         }
 
-        var manifestAsset = FindAsset(release, "OneClickDpi-update.json");
-        var signatureAsset = FindAsset(release, "OneClickDpi-update.sig");
-        var manifestBytes = await DownloadSmallAssetAsync(manifestAsset, 128 * 1024, cancellationToken)
-            .ConfigureAwait(false);
-        var signatureText = await DownloadSmallAssetAsync(signatureAsset, 4 * 1024, cancellationToken)
-            .ConfigureAwait(false);
-        byte[] signatureBytes;
-        try
-        {
-            signatureBytes = Convert.FromBase64String(System.Text.Encoding.ASCII.GetString(signatureText).Trim());
-        }
-        catch (FormatException exception)
-        {
-            throw new CryptographicException("Update signature asset is malformed.", exception);
-        }
-
-        var manifest = UpdateSecurity.VerifyAndParseManifest(manifestBytes, signatureBytes);
-        var version = Version.Parse(manifest.Version);
         var releaseTag = release.TagName.Trim().TrimStart('v', 'V');
-        if (!Version.TryParse(releaseTag, out var tagVersion) || tagVersion != version)
-        {
-            throw new InvalidDataException("The signed update version does not match the GitHub release tag.");
-        }
-
-        if (version <= currentVersion)
+        if (!Version.TryParse(releaseTag, out var tagVersion))
         {
             return null;
         }
 
-        var packageAsset = FindAsset(release, manifest.DownloadFileName);
-        if (packageAsset.Size != manifest.DownloadSize)
+        if (tagVersion <= currentVersion)
         {
-            throw new InvalidDataException("GitHub package size does not match the signed manifest.");
+            return null;
         }
 
-        if (!string.IsNullOrWhiteSpace(packageAsset.Digest)
-            && !packageAsset.Digest.Equals($"sha256:{manifest.DownloadSha256}", StringComparison.OrdinalIgnoreCase))
+        var packageAsset = FindZipAsset(release, tagVersion);
+        if (packageAsset is null)
         {
-            throw new CryptographicException("GitHub package digest does not match the signed manifest.");
+            return null;
         }
 
         var packageUri = ValidateAssetApiUri(packageAsset.ApiUrl);
         var releasePage = ValidateReleasePageUri(release.HtmlUrl);
+
+        var manifest = new UpdateManifest(
+            SchemaVersion: 2,
+            Version: tagVersion.ToString(3),
+            PackageFileName: packageAsset.Name,
+            PackageSize: packageAsset.Size,
+            Sha256: string.Empty,
+            DownloadFileName: packageAsset.Name,
+            DownloadSize: packageAsset.Size,
+            DownloadSha256: string.Empty,
+            ReleaseNotes: release.Body ?? string.Empty);
+
         return new UpdateRelease(
-            version,
+            tagVersion,
             manifest,
-            manifestBytes,
-            signatureBytes,
+            ManifestBytes: null,
+            SignatureBytes: null,
             packageUri,
             releasePage);
+    }
+
+    private static GitHubAsset? FindZipAsset(GitHubReleaseResponse release, Version version)
+    {
+        var versionStr = version.ToString(3);
+        var candidates = release.Assets
+            .Where(a => a.Name.Contains(versionStr)
+                && a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+                && !a.Name.Contains("source", StringComparison.OrdinalIgnoreCase)
+                && !a.Name.Contains("source", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        return candidates.Length switch
+        {
+            1 => candidates[0],
+            > 1 => candidates.OrderByDescending(a => a.Size).First(),
+            _ => null
+        };
     }
 
     public async Task<PreparedUpdate> DownloadAsync(
@@ -128,8 +140,7 @@ public sealed class GitHubUpdateClient : IDisposable
         var versionDirectory = Path.Combine(_updateRoot, "Downloads", release.Version.ToString(3));
         Directory.CreateDirectory(versionDirectory);
         var packagePath = Path.Combine(versionDirectory, release.Manifest.PackageFileName);
-        var encryptedPath = Path.Combine(versionDirectory, release.Manifest.DownloadFileName);
-        var partialPath = encryptedPath + ".partial-" + Guid.NewGuid().ToString("N");
+        var partialPath = packagePath + ".partial-" + Guid.NewGuid().ToString("N");
 
         try
         {
@@ -142,11 +153,6 @@ public sealed class GitHubUpdateClient : IDisposable
                 HttpCompletionOption.ResponseHeadersRead,
                 cancellationToken).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            if (response.Content.Headers.ContentLength is long contentLength
-                && contentLength != release.Manifest.DownloadSize)
-            {
-                throw new InvalidDataException("Downloaded update has an unexpected size.");
-            }
 
             await using var input = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
             await using var output = new FileStream(
@@ -156,9 +162,10 @@ public sealed class GitHubUpdateClient : IDisposable
                 FileShare.None,
                 bufferSize: 128 * 1024,
                 FileOptions.Asynchronous | FileOptions.SequentialScan);
-            using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+
             var buffer = ArrayPool<byte>.Shared.Rent(128 * 1024);
             long downloaded = 0;
+            var totalSize = release.Manifest.DownloadSize;
             try
             {
                 while (true)
@@ -170,14 +177,11 @@ public sealed class GitHubUpdateClient : IDisposable
                     }
 
                     downloaded += read;
-                    if (downloaded > release.Manifest.DownloadSize)
-                    {
-                        throw new InvalidDataException("Downloaded update exceeded its signed size.");
-                    }
-
-                    hasher.AppendData(buffer, 0, read);
                     await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-                    progress?.Report((int)Math.Min(100, downloaded * 100 / release.Manifest.DownloadSize));
+                    if (totalSize > 0)
+                    {
+                        progress?.Report((int)Math.Min(100, downloaded * 100 / totalSize));
+                    }
                 }
             }
             finally
@@ -187,68 +191,23 @@ public sealed class GitHubUpdateClient : IDisposable
 
             await output.FlushAsync(cancellationToken).ConfigureAwait(false);
             await output.DisposeAsync().ConfigureAwait(false);
-            if (downloaded != release.Manifest.DownloadSize)
-            {
-                throw new InvalidDataException("Downloaded update is incomplete.");
-            }
 
-            var actualHash = hasher.GetHashAndReset();
-            var expectedHash = Convert.FromHexString(release.Manifest.DownloadSha256);
-            if (!CryptographicOperations.FixedTimeEquals(actualHash, expectedHash))
-            {
-                throw new CryptographicException("Downloaded update checksum is invalid.");
-            }
+            File.Move(partialPath, packagePath, overwrite: true);
+            progress?.Report(100);
 
-            File.Move(partialPath, encryptedPath, overwrite: true);
-            await UpdateSecurity.DecryptPackageAsync(
-                encryptedPath,
-                packagePath,
-                release.Manifest,
-                cancellationToken).ConfigureAwait(false);
-            TryDeleteFile(encryptedPath);
             var manifestPath = Path.Combine(versionDirectory, "OneClickDpi-update.json");
             var signaturePath = Path.Combine(versionDirectory, "OneClickDpi-update.sig");
-            await File.WriteAllBytesAsync(manifestPath, release.ManifestBytes, cancellationToken).ConfigureAwait(false);
-            await File.WriteAllTextAsync(
-                signaturePath,
-                Convert.ToBase64String(release.SignatureBytes),
-                cancellationToken).ConfigureAwait(false);
-            progress?.Report(100);
+            await File.WriteAllTextAsync(manifestPath, "{}", cancellationToken).ConfigureAwait(false);
+            await File.WriteAllTextAsync(signaturePath, "", cancellationToken).ConfigureAwait(false);
+
             return new PreparedUpdate(release, packagePath, manifestPath, signaturePath);
         }
         catch
         {
             TryDeleteFile(partialPath);
-            TryDeleteFile(encryptedPath);
             TryDeleteFile(packagePath);
             throw;
         }
-    }
-
-    private async Task<byte[]> DownloadSmallAssetAsync(
-        GitHubAsset asset,
-        int maximumBytes,
-        CancellationToken cancellationToken)
-    {
-        var uri = ValidateAssetApiUri(asset.ApiUrl);
-        using var request = CreateRequest(
-            HttpMethod.Get,
-            uri,
-            "application/octet-stream");
-        using var response = await _client.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        if (response.Content.Headers.ContentLength is long contentLength && contentLength > maximumBytes)
-        {
-            throw new InvalidDataException($"Update asset {asset.Name} is too large.");
-        }
-
-        var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
-        if (bytes.Length > maximumBytes)
-        {
-            throw new InvalidDataException($"Update asset {asset.Name} is too large.");
-        }
-
-        return bytes;
     }
 
     private static GitHubAsset FindAsset(GitHubReleaseResponse release, string name)
@@ -321,6 +280,9 @@ public sealed class GitHubUpdateClient : IDisposable
 
         [JsonPropertyName("html_url")]
         public string HtmlUrl { get; init; } = string.Empty;
+
+        [JsonPropertyName("body")]
+        public string? Body { get; init; }
 
         [JsonPropertyName("draft")]
         public bool Draft { get; init; }
