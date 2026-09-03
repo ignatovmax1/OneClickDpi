@@ -1,0 +1,6 @@
+OneClick DPI 0.6.6
+
+- Routes Discord API, CDN, and Gateway through a verified supported-region AI exit when the direct DPI route fails.
+- Re-checks the real Discord WebSocket Gateway after the local tunnel starts.
+- Keeps Discord voice UDP and YouTube video media on their existing fast paths.
+- Preserves the working ChatGPT and Claude route verified in a real browser.

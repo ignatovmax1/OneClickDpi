@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="src/OneClickDpi.Core/OneClickDpi.Core.csproj" />
+  <Project Path="src/OneClickDpi.App/OneClickDpi.App.csproj" />
+  <Project Path="tests/OneClickDpi.Core.Tests/OneClickDpi.Core.Tests.csproj" />
+  <Project Path="tools/OneClickDpi.ReleaseTool/OneClickDpi.ReleaseTool.csproj" />
+  <Project Path="tools/OneClickDpi.TunnelSmoke/OneClickDpi.TunnelSmoke.csproj" />
+  <Project Path="tools/OneClickDpi.UpdateSmoke/OneClickDpi.UpdateSmoke.csproj" />
+</Solution>

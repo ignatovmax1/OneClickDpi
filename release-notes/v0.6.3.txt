@@ -1,0 +1,8 @@
+OneClick DPI 0.6.3
+
+- Adds an official Psiphon tunnel-core route with an NL exit for ChatGPT and Claude.
+- Keeps YouTube control traffic and Telegram on Tor while rejecting Tor's T1 region for AI services.
+- Distinguishes a normal Cloudflare browser challenge from a regional access failure.
+- Runs Psiphon as a private localhost proxy without changing the Windows system proxy.
+- Keeps Discord and YouTube video media on the fast direct route.
+- Prevents two copies of OneClick DPI from running at the same time after an update.

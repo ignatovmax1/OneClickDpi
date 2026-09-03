@@ -1,0 +1,12 @@
+<Application x:Class="OneClickDpi.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <SolidColorBrush x:Key="WindowBackground" Color="#0B1020" />
+        <SolidColorBrush x:Key="CardBackground" Color="#121A2D" />
+        <SolidColorBrush x:Key="SecondaryText" Color="#92A0BA" />
+        <SolidColorBrush x:Key="Accent" Color="#6C63FF" />
+        <SolidColorBrush x:Key="Healthy" Color="#38D996" />
+        <SolidColorBrush x:Key="Unhealthy" Color="#FF6577" />
+    </Application.Resources>
+</Application>

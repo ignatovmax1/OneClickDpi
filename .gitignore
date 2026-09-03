@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+publish-*/
+publish/
+.tunnel-smoke-data/
+.vs/
+TestResults/
+*.user
+*.suo
+*.tmp
+*.partial-*
+artifacts/

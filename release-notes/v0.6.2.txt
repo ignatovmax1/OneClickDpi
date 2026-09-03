@@ -1,0 +1,7 @@
+OneClick DPI 0.6.2
+
+- ChatGPT and Claude now use the selective local Tor/Snowflake tunnel.
+- Added automatic reachability checks and status cards for ChatGPT and Claude.
+- Telegram opens a prefilled local SOCKS5 setup on the first successful connection; only Telegram's confirmation click remains.
+- Discord and YouTube video media stay on the fast direct DPI route.
+- The tunnel now starts automatically on every connection so the added services are always available.

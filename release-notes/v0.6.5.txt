@@ -1,0 +1,7 @@
+OneClick DPI 0.6.5
+
+- Detects the real ChatGPT VPN rejection page instead of reporting its HTTP 403 as healthy.
+- Detects Claude's regional-unavailability page even when the server returns HTTP 200.
+- Validates both AI services immediately after each Psiphon connection.
+- Automatically rejects a blocked exit IP and retries supported exits in GB, US, CA, FR, DE, FI, and NL.
+- Checks and downloads signed updates directly, without inheriting a stale local proxy from a previous session.

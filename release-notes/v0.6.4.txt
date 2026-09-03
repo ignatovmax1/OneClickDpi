@@ -1,0 +1,7 @@
+OneClick DPI 0.6.4
+
+- Fixes the GUI remaining on the connection screen when an AI route never becomes ready.
+- Starts Tor and Psiphon concurrently to reduce connection time.
+- Limits Tor startup to 100 seconds and each AI route attempt to 25 seconds.
+- Automatically tries NL, DE, and FI exits before using the safe fallback.
+- Shows the current retry stage in the GUI and always restores the connect button.
