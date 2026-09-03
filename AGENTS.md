@@ -35,9 +35,25 @@ dotnet publish src/OneClickDpi.App/OneClickDpi.App.csproj -c Release -r win-x64 
 - `tests/OneClickDpi.Core.Tests/` — тесты (console runner)
 - `tools/` — утилиты релиза
 
+## Update Check System (PC + Android)
+
+Приложение проверяет обновления в трёх случаях:
+1. **Ручное нажатие** — кнопка "Проверить обновления" в UI
+2. **Автозапуск** — при заходе в приложение
+3. **Включение** — при нажатии кнопки "ВКЛ" (автоматически)
+
+PC и Android синхронизированы — одна и та же логика, одновременные релизы.
+
+## Server Ports
+
+- **UDP 443** — Hysteria2 для PC клиента (OneClickDpi)
+- **UDP 8443** — Hysteria2 для Android клиента (HelloDpi/Psiphon)
+- **TCP 1080** — danted (SOCKS5)
+- sing-box конфиг: `/etc/oneclickdpi-hy2/config.json`
+
 ## VPS
 
 - Адрес: `185.173.144.43`
 - SSH алиас: `vps`
-- sing-box (Hysteria2) на UDP 443
+- sing-box (Hysteria2) на UDP 443 + 8443
 - danted (SOCKS5) на TCP 1080
