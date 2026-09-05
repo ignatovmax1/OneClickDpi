@@ -258,6 +258,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         SetBusy(true);
         try
         {
+            if (!_isConnected)
+            {
+                _ = CheckAndDownloadUpdateAsync();
+            }
+
             if (_isConnected)
             {
                 await DisconnectAsync();
@@ -460,8 +465,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                 UpdateText = $"Скачиваем обновление v{release.Version.ToString(3)}: {percentage}%";
             });
             _preparedUpdate = await _updateClient.DownloadAsync(release, progress, _lifetime.Token);
-            UpdateText = $"Обновление v{release.Version.ToString(3)} готово";
-            _logWriter.Write($"Update {release.Version.ToString(3)} downloaded and verified.");
+            UpdateText = $"Обновление v{release.Version.ToString(3)} готово, устанавливаем…";
+            _logWriter.Write($"Update {release.Version.ToString(3)} downloaded, auto-installing.");
+            _updateBusy = false;
+            NotifyUpdateState();
+            await InstallPreparedUpdateAsync();
+            return;
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
@@ -480,7 +489,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private async Task RunPeriodicUpdateChecksAsync()
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromHours(4));
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(30));
         try
         {
             while (await timer.WaitForNextTickAsync(_lifetime.Token))
