@@ -52,9 +52,21 @@ public sealed class VpsSshTunnelEngine : IAsyncDisposable
                     "ssh.exe не найден. Установите OpenSSH или Git for Windows.");
             }
 
-            var startInfo = new ProcessStartInfo
+            var sshArgs = new StringBuilder();
+            sshArgs.Append("-N ");
+            sshArgs.Append("-o StrictHostKeyChecking=no ");
+            sshArgs.Append("-o UserKnownHostsFile=NUL ");
+            sshArgs.Append("-o PreferredAuthentications=password ");
+            sshArgs.Append("-o PubkeyAuthentication=no ");
+            sshArgs.Append("-o NumberOfPasswordPrompts=1 ");
+            sshArgs.Append($"-p {VpsSshPort} ");
+            sshArgs.Append($"-D 127.0.0.1:{_localPort} ");
+            sshArgs.Append($"{VpsUser}@{VpsHost}");
+
+            var psi = new ProcessStartInfo
             {
-                FileName = ssh,
+                FileName = "cmd.exe",
+                Arguments = $"/c \"echo {VpsPassword} | \"{ssh}\" {sshArgs}\"",
                 WorkingDirectory = Path.GetDirectoryName(ssh) ?? string.Empty,
                 UseShellExecute = false,
                 CreateNoWindow = true,
@@ -63,24 +75,9 @@ public sealed class VpsSshTunnelEngine : IAsyncDisposable
                 RedirectStandardInput = true
             };
 
-            startInfo.ArgumentList.Add("-N");
-            startInfo.ArgumentList.Add("-o");
-            startInfo.ArgumentList.Add("StrictHostKeyChecking=no");
-            startInfo.ArgumentList.Add("-o");
-            startInfo.ArgumentList.Add("UserKnownHostsFile=NUL");
-            startInfo.ArgumentList.Add("-o");
-            startInfo.ArgumentList.Add("ServerAliveInterval=30");
-            startInfo.ArgumentList.Add("-o");
-            startInfo.ArgumentList.Add("ServerAliveCountMax=3");
-            startInfo.ArgumentList.Add("-p");
-            startInfo.ArgumentList.Add(VpsSshPort.ToString());
-            startInfo.ArgumentList.Add("-D");
-            startInfo.ArgumentList.Add($"127.0.0.1:{_localPort}");
-            startInfo.ArgumentList.Add($"{VpsUser}@{VpsHost}");
-
             var process = new Process
             {
-                StartInfo = startInfo,
+                StartInfo = psi,
                 EnableRaisingEvents = true
             };
 
@@ -97,8 +94,6 @@ public sealed class VpsSshTunnelEngine : IAsyncDisposable
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
             _process = process;
-
-            WritePassword(process);
 
             await WaitForPortReadyAsync(cancellationToken).ConfigureAwait(false);
             LogReceived?.Invoke($"VPS SSH: туннель активен, SOCKS5 на 127.0.0.1:{_localPort}");
@@ -158,19 +153,6 @@ public sealed class VpsSshTunnelEngine : IAsyncDisposable
         }
     }
 
-    private void WritePassword(Process process)
-    {
-        try
-        {
-            process.StandardInput.WriteLine(VpsPassword);
-            process.StandardInput.Flush();
-        }
-        catch (Exception exception)
-        {
-            LogReceived?.Invoke($"VPS SSH: не удалось передать пароль: {exception.Message}");
-        }
-    }
-
     private async Task WaitForPortReadyAsync(CancellationToken cancellationToken)
     {
         var deadline = DateTime.UtcNow.AddSeconds(15);
@@ -197,32 +179,24 @@ public sealed class VpsSshTunnelEngine : IAsyncDisposable
         throw new TimeoutException("SSH-туннель не стал доступен за 15 секунд.");
     }
 
-    private static string? FindSshExecutable()
+    private static string FindSshExecutable()
     {
-        var systemSsh = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.System),
-            "openssh", "ssh.exe");
-        if (File.Exists(systemSsh))
-        {
-            return systemSsh;
-        }
-
-        var pathSsh = FindOnPath("ssh.exe");
-        if (pathSsh is not null)
-        {
-            return pathSsh;
-        }
-
         var gitSsh = @"C:\Program Files\Git\usr\bin\ssh.exe";
         if (File.Exists(gitSsh))
         {
             return gitSsh;
         }
 
-        return null;
+        var systemSsh = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "OpenSSH", "ssh.exe");
+        if (File.Exists(systemSsh))
+        {
+            return systemSsh;
+        }
+
+        return FindOnPath("ssh.exe");
     }
 
-    private static string? FindOnPath(string fileName)
+    private static string FindOnPath(string fileName)
     {
         var path = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
         foreach (var dir in path.Split(';', StringSplitOptions.RemoveEmptyEntries))
@@ -234,7 +208,7 @@ public sealed class VpsSshTunnelEngine : IAsyncDisposable
             }
         }
 
-        return null;
+        return @"C:\Windows\System32\OpenSSH\ssh.exe";
     }
 
     private void OnOutput(object sender, DataReceivedEventArgs e)
