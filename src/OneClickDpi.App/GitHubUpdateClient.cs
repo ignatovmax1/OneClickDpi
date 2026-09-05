@@ -11,7 +11,7 @@ namespace OneClickDpi.App;
 
 public sealed class GitHubUpdateClient : IDisposable
 {
-    public const string Repository = "ignatovmax1/OneClickDpi";
+    public const string Repository = "ignatovmax1/OneClickDpi-Updates";
     private static readonly Uri DefaultLatestReleaseApi = new(
         $"https://api.github.com/repos/{Repository}/releases/latest");
     private static readonly string AllowedAssetApiPrefix =
