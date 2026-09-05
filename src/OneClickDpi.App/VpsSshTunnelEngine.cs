@@ -1,236 +1,129 @@
-using System.Diagnostics;
-using System.IO;
+using System.Net;
 using System.Net.Sockets;
-using System.Text;
+using System.Threading;
 
 namespace OneClickDpi.App;
 
 public sealed class VpsSshTunnelEngine : IAsyncDisposable
 {
     private const string VpsHost = "185.173.144.43";
-    private const int VpsSshPort = 22;
-    private const string VpsUser = "root";
-    private const string VpsPassword = "UPjjkvKdj68f";
-    private const int RemoteSocksPort = 1080;
+    private const int VpsSocksPort = 1080;
 
     private readonly int _localPort;
-    private readonly SemaphoreSlim _gate = new(1, 1);
-    private Process? _process;
+    private readonly CancellationTokenSource _lifetime = new();
+    private TcpListener? _listener;
     private bool _intentionalStop;
+    private Task? _acceptLoop;
 
     public VpsSshTunnelEngine(int localPort = 19083)
     {
         _localPort = localPort;
     }
 
-    public bool IsRunning => _process is { HasExited: false };
+    public bool IsRunning => _listener is not null;
     public int SocksPort => _localPort;
     public event Action<string>? LogReceived;
     public event EventHandler? UnexpectedlyExited;
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public Task StartAsync(CancellationToken cancellationToken)
     {
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        if (IsRunning)
+        {
+            return Task.CompletedTask;
+        }
+
+        _listener = new TcpListener(IPAddress.Loopback, _localPort);
+        _listener.Start(128);
+        _acceptLoop = AcceptLoopAsync(cancellationToken);
+        LogReceived?.Invoke($"VPS SOCKS5: слушает на 127.0.0.1:{_localPort} -> {VpsHost}:{VpsSocksPort}");
+        return Task.CompletedTask;
+    }
+
+    private async Task AcceptLoopAsync(CancellationToken cancellationToken)
+    {
         try
         {
-            if (IsRunning)
+            while (!cancellationToken.IsCancellationRequested)
             {
-                return;
+                var client = await _listener!.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
+                _ = HandleClientAsync(client, cancellationToken);
             }
-
-            StopStaleProcess();
-            _intentionalStop = false;
-
-            LogReceived?.Invoke(
-                $"VPS SSH: подключаемся к {VpsUser}@{VpsHost}:{VpsSshPort}, " +
-                $"проброс SOCKS5 на 127.0.0.1:{_localPort} -> {VpsHost}:{RemoteSocksPort}");
-
-            var ssh = FindSshExecutable();
-            if (ssh is null)
-            {
-                throw new InvalidOperationException(
-                    "ssh.exe не найден. Установите OpenSSH или Git for Windows.");
-            }
-
-            var sshArgs = new StringBuilder();
-            sshArgs.Append("-N ");
-            sshArgs.Append("-o StrictHostKeyChecking=no ");
-            sshArgs.Append("-o UserKnownHostsFile=NUL ");
-            sshArgs.Append("-o PreferredAuthentications=password ");
-            sshArgs.Append("-o PubkeyAuthentication=no ");
-            sshArgs.Append("-o NumberOfPasswordPrompts=1 ");
-            sshArgs.Append($"-p {VpsSshPort} ");
-            sshArgs.Append($"-D 127.0.0.1:{_localPort} ");
-            sshArgs.Append($"{VpsUser}@{VpsHost}");
-
-            var psi = new ProcessStartInfo
-            {
-                FileName = "cmd.exe",
-                Arguments = $"/c \"echo {VpsPassword} | \"{ssh}\" {sshArgs}\"",
-                WorkingDirectory = Path.GetDirectoryName(ssh) ?? string.Empty,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                RedirectStandardInput = true
-            };
-
-            var process = new Process
-            {
-                StartInfo = psi,
-                EnableRaisingEvents = true
-            };
-
-            process.OutputDataReceived += OnOutput;
-            process.ErrorDataReceived += OnOutput;
-            process.Exited += OnExited;
-
-            if (!process.Start())
-            {
-                process.Dispose();
-                throw new InvalidOperationException("SSH-процесс не запустился.");
-            }
-
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-            _process = process;
-
-            await WaitForPortReadyAsync(cancellationToken).ConfigureAwait(false);
-            LogReceived?.Invoke($"VPS SSH: туннель активен, SOCKS5 на 127.0.0.1:{_localPort}");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            StopStaleProcess();
-            throw;
         }
-        catch
+        catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested)
         {
-            StopStaleProcess();
-            throw;
         }
-        finally
+        catch (Exception exception)
         {
-            _gate.Release();
+            LogReceived?.Invoke($"VPS SOCKS5 accept loop error: {exception.Message}");
         }
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken)
+    private async Task HandleClientAsync(TcpClient client, CancellationToken cancellationToken)
     {
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            StopStaleProcess();
+            client.NoDelay = true;
+            using var upstream = await ConnectToVpsAsync(cancellationToken).ConfigureAwait(false);
+            using var clientStream = client.GetStream();
+            using var upstreamStream = upstream.GetStream();
+
+            var relay1 = clientStream.CopyToAsync(upstreamStream, cancellationToken);
+            var relay2 = upstreamStream.CopyToAsync(clientStream, cancellationToken);
+            await Task.WhenAny(relay1, relay2).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            LogReceived?.Invoke($"VPS SOCKS5 relay error: {exception.Message}");
         }
         finally
         {
-            _gate.Release();
+            try { client.Dispose(); } catch { }
         }
     }
 
-    private void StopStaleProcess()
+    private async Task<TcpClient> ConnectToVpsAsync(CancellationToken cancellationToken)
+    {
+        var client = new TcpClient();
+        await client.ConnectAsync(VpsHost, VpsSocksPort, cancellationToken).ConfigureAwait(false);
+        client.NoDelay = true;
+        return client;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken)
     {
         _intentionalStop = true;
-        var process = _process;
-        _process = null;
-        if (process is null)
-        {
-            return;
-        }
-
         try
         {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
+            _lifetime.Cancel();
+            _listener?.Stop();
+            _acceptLoop?.Wait(3000);
         }
-        catch
-        {
-        }
+        catch { }
         finally
         {
-            process.Dispose();
-        }
-    }
-
-    private async Task WaitForPortReadyAsync(CancellationToken cancellationToken)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(15);
-        while (DateTime.UtcNow < deadline)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (_process is null || _process.HasExited)
-            {
-                throw new InvalidOperationException("SSH-процесс завершился до готовности туннеля.");
-            }
-
-            try
-            {
-                using var test = new System.Net.Sockets.TcpClient();
-                await test.ConnectAsync("127.0.0.1", _localPort, cancellationToken).ConfigureAwait(false);
-                return;
-            }
-            catch
-            {
-                await Task.Delay(500, cancellationToken).ConfigureAwait(false);
-            }
+            _listener?.Dispose();
+            _listener = null;
+            _acceptLoop = null;
         }
 
-        throw new TimeoutException("SSH-туннель не стал доступен за 15 секунд.");
-    }
-
-    private static string FindSshExecutable()
-    {
-        var gitSsh = @"C:\Program Files\Git\usr\bin\ssh.exe";
-        if (File.Exists(gitSsh))
-        {
-            return gitSsh;
-        }
-
-        var systemSsh = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "OpenSSH", "ssh.exe");
-        if (File.Exists(systemSsh))
-        {
-            return systemSsh;
-        }
-
-        return FindOnPath("ssh.exe");
-    }
-
-    private static string FindOnPath(string fileName)
-    {
-        var path = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-        foreach (var dir in path.Split(';', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var candidate = Path.Combine(dir.Trim(), fileName);
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        return @"C:\Windows\System32\OpenSSH\ssh.exe";
-    }
-
-    private void OnOutput(object sender, DataReceivedEventArgs e)
-    {
-        if (!string.IsNullOrWhiteSpace(e.Data))
-        {
-            LogReceived?.Invoke($"VPS SSH: {e.Data}");
-        }
-    }
-
-    private void OnExited(object? sender, EventArgs e)
-    {
-        LogReceived?.Invoke("VPS SSH: процесс завершён.");
         if (!_intentionalStop)
         {
             UnexpectedlyExited?.Invoke(this, EventArgs.Empty);
         }
+
+        return Task.CompletedTask;
     }
 
     public async ValueTask DisposeAsync()
     {
         await StopAsync(CancellationToken.None).ConfigureAwait(false);
-        _gate.Dispose();
+        _lifetime.Dispose();
     }
 }
