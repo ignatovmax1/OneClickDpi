@@ -5,7 +5,7 @@ namespace OneClickDpi.App;
 public sealed class SelectiveTunnelCoordinator : IAsyncDisposable
 {
     private readonly TorTunnelEngine _tor;
-    private readonly PsiphonTunnelEngine _psiphon;
+    private readonly VpsSshTunnelEngine _vps;
     private readonly WindowsProxyController _windowsProxy;
     private readonly SelectiveRouteMatcher _matcher;
     private readonly TelegramProxyIntegration _telegramProxy;
@@ -15,28 +15,28 @@ public sealed class SelectiveTunnelCoordinator : IAsyncDisposable
 
     public SelectiveTunnelCoordinator(
         TorTunnelEngine tor,
-        PsiphonTunnelEngine psiphon,
+        VpsSshTunnelEngine vps,
         WindowsProxyController windowsProxy,
         SelectiveRouteMatcher matcher,
         TelegramProxyIntegration telegramProxy)
     {
         _tor = tor ?? throw new ArgumentNullException(nameof(tor));
-        _psiphon = psiphon ?? throw new ArgumentNullException(nameof(psiphon));
+        _vps = vps ?? throw new ArgumentNullException(nameof(vps));
         _windowsProxy = windowsProxy ?? throw new ArgumentNullException(nameof(windowsProxy));
         _matcher = matcher ?? throw new ArgumentNullException(nameof(matcher));
         _telegramProxy = telegramProxy ?? throw new ArgumentNullException(nameof(telegramProxy));
         _tor.LogReceived += ForwardLog;
-        _psiphon.LogReceived += ForwardLog;
+        _vps.LogReceived += ForwardLog;
         _tor.BootstrapProgressChanged += ForwardProgress;
         _windowsProxy.LogReceived += ForwardLog;
         _telegramProxy.LogReceived += ForwardLog;
         _tor.UnexpectedlyExited += OnTorUnexpectedlyExited;
-        _psiphon.UnexpectedlyExited += OnPsiphonUnexpectedlyExited;
+        _vps.UnexpectedlyExited += OnVpsUnexpectedlyExited;
         _windowsProxy.RecoverStaleSettings();
     }
 
     public bool IsRunning => _tor.IsRunning && _localProxy?.IsRunning == true && _windowsProxy.IsEnabled;
-    public bool AiTunnelRunning => _psiphon.IsRunning;
+    public bool AiTunnelRunning => _vps.IsRunning;
     public bool TelegramSetupPromptOpened { get; private set; }
     public event Action<string>? LogReceived;
     public event Action<int>? ProgressChanged;
@@ -57,7 +57,7 @@ public sealed class SelectiveTunnelCoordinator : IAsyncDisposable
             {
                 using var startLifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 var torStart = _tor.StartAsync(startLifetime.Token);
-                var psiphonStart = _psiphon.StartAsync(startLifetime.Token);
+                var vpsStart = _vps.StartAsync(startLifetime.Token);
                 try
                 {
                     await torStart.ConfigureAwait(false);
@@ -67,7 +67,7 @@ public sealed class SelectiveTunnelCoordinator : IAsyncDisposable
                     await startLifetime.CancelAsync().ConfigureAwait(false);
                     try
                     {
-                        await psiphonStart.ConfigureAwait(false);
+                        await vpsStart.ConfigureAwait(false);
                     }
                     catch
                     {
@@ -78,7 +78,7 @@ public sealed class SelectiveTunnelCoordinator : IAsyncDisposable
 
                 try
                 {
-                    await psiphonStart.ConfigureAwait(false);
+                    await vpsStart.ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -87,13 +87,13 @@ public sealed class SelectiveTunnelCoordinator : IAsyncDisposable
                 catch (Exception exception)
                 {
                     LogReceived?.Invoke(
-                        $"Psiphon AI tunnel is unavailable; using Tor fallback: {exception.Message}");
+                        $"VPS SSH tunnel unavailable; AI services will not work: {exception.Message}");
                 }
 
                 _localProxy = new SelectiveHttpProxy(
                     _matcher,
                     socksPort: _tor.SocksPort,
-                    aiSocksPort: _psiphon.IsRunning ? _psiphon.SocksPort : _tor.SocksPort);
+                    aiSocksPort: _vps.IsRunning ? _vps.SocksPort : _tor.SocksPort);
                 _localProxy.LogReceived += ForwardLog;
                 await _localProxy.StartAsync(cancellationToken).ConfigureAwait(false);
 
@@ -153,7 +153,7 @@ public sealed class SelectiveTunnelCoordinator : IAsyncDisposable
 
         try
         {
-            await _psiphon.StopAsync(cancellationToken).ConfigureAwait(false);
+            await _vps.StopAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -190,7 +190,7 @@ public sealed class SelectiveTunnelCoordinator : IAsyncDisposable
         UnexpectedlyExited?.Invoke(this, EventArgs.Empty);
     }
 
-    private void OnPsiphonUnexpectedlyExited(object? sender, EventArgs eventArgs)
+    private void OnVpsUnexpectedlyExited(object? sender, EventArgs eventArgs)
     {
         try
         {
@@ -198,10 +198,10 @@ public sealed class SelectiveTunnelCoordinator : IAsyncDisposable
         }
         catch (Exception exception)
         {
-            LogReceived?.Invoke($"Failed to restore proxy after Psiphon exit: {exception.Message}");
+            LogReceived?.Invoke($"Failed to restore proxy after VPS SSH exit: {exception.Message}");
         }
 
-        LogReceived?.Invoke("Psiphon AI route stopped; reconnect is required.");
+        LogReceived?.Invoke("VPS SSH tunnel stopped; reconnect is required.");
         UnexpectedlyExited?.Invoke(this, EventArgs.Empty);
     }
 
@@ -209,14 +209,14 @@ public sealed class SelectiveTunnelCoordinator : IAsyncDisposable
     {
         await StopAsync(CancellationToken.None).ConfigureAwait(false);
         _tor.LogReceived -= ForwardLog;
-        _psiphon.LogReceived -= ForwardLog;
+        _vps.LogReceived -= ForwardLog;
         _tor.BootstrapProgressChanged -= ForwardProgress;
         _windowsProxy.LogReceived -= ForwardLog;
         _telegramProxy.LogReceived -= ForwardLog;
         _tor.UnexpectedlyExited -= OnTorUnexpectedlyExited;
-        _psiphon.UnexpectedlyExited -= OnPsiphonUnexpectedlyExited;
+        _vps.UnexpectedlyExited -= OnVpsUnexpectedlyExited;
         await _tor.DisposeAsync().ConfigureAwait(false);
-        await _psiphon.DisposeAsync().ConfigureAwait(false);
+        await _vps.DisposeAsync().ConfigureAwait(false);
         _windowsProxy.Dispose();
         _gate.Dispose();
     }

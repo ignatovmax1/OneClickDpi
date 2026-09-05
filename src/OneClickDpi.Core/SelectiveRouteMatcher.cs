@@ -26,17 +26,17 @@ public sealed class SelectiveRouteMatcher
         "t.me",
         "telegra.ph",
         "telesco.pe",
-        "tdesktop.com"
-    ];
-
-    private static readonly string[] AiDomainSuffixes =
-    [
+        "tdesktop.com",
         "discord.com",
         "discord.gg",
         "discordapp.com",
         "discordapp.net",
         "discordcdn.com",
-        "discord.media",
+        "discord.media"
+    ];
+
+    private static readonly string[] AiDomainSuffixes =
+    [
         "chatgpt.com",
         "openai.com",
         "oaistatic.com",
@@ -55,7 +55,15 @@ public sealed class SelectiveRouteMatcher
         "prodregistryv2.org",
         "claude.ai",
         "claudeusercontent.com",
-        "anthropic.com"
+        "anthropic.com",
+        "whatsapp.com",
+        "whatsapp.net",
+        "api.whatsapp.com",
+        "web.whatsapp.com",
+        "static.whatsapp.net",
+        "media.whatsapp.com",
+        "mmg.whatsapp.net",
+        "g.whatsapp.net"
     ];
 
     private static readonly IpNetwork[] TelegramNetworks =

@@ -5,9 +5,9 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>OneClickDpi</AssemblyName>
     <RootNamespace>OneClickDpi.App</RootNamespace>
-    <Version>0.6.28</Version>
-    <FileVersion>0.6.28.0</FileVersion>
-    <AssemblyVersion>0.6.28.0</AssemblyVersion>
+    <Version>0.6.29</Version>
+    <FileVersion>0.6.29.0</FileVersion>
+    <AssemblyVersion>0.6.29.0</AssemblyVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Product>OneClick DPI</Product>
     <ApplicationManifest>app.manifest</ApplicationManifest>

@@ -90,13 +90,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         var tor = new TorTunnelEngine(
             runtime.TorDirectory,
             Path.Combine(localData, "TorData"));
-        var psiphon = new PsiphonTunnelEngine(
-            runtime.PsiphonDirectory,
-            Path.Combine(localData, "PsiphonData"),
-            Path.Combine(localData, "psiphon-process.pid"));
+        var vps = new VpsSshTunnelEngine();
         var tunnel = new SelectiveTunnelCoordinator(
             tor,
-            psiphon,
+            vps,
             new WindowsProxyController(Path.Combine(localData, "windows-proxy-backup.json")),
             new SelectiveRouteMatcher(),
             new TelegramProxyIntegration(Path.Combine(localData, "telegram-proxy-setup-19050.txt")));
@@ -551,22 +548,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         _ = Application.Current.Dispatcher.InvokeAsync(() =>
         {
-            if (message.StartsWith("Psiphon AI attempt", StringComparison.Ordinal))
+            if (message.StartsWith("VPS SSH:", StringComparison.Ordinal))
             {
-                var region = message.Contains("region DE", StringComparison.Ordinal)
-                    ? "Германию"
-                    : message.Contains("region FI", StringComparison.Ordinal)
-                        ? "Финляндию"
-                        : "Нидерланды";
-                DetailText = $"Подбираем маршрут ИИ через {region}: не более 25 секунд на вариант.";
-            }
-            else if (message.Contains("trying another region", StringComparison.Ordinal))
-            {
-                DetailText = "Текущий маршрут ИИ не ответил — автоматически пробуем следующую страну.";
-            }
-            else if (message.Contains("using Tor fallback", StringComparison.Ordinal))
-            {
-                DetailText = "Отдельный маршрут ИИ недоступен. Завершаем подключение через резервный туннель.";
+                DetailText = "Подключаемся к VPN-серверу через SSH.";
             }
         });
     }
