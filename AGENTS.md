@@ -11,7 +11,10 @@
    - `dotnet publish` с `PublishSingleFile=true` для win-x64
    - ZIP-пакет `OneClickDpi-MVP-{version}-win-x64.zip`
    - Source ZIP `OneClickDpi-{version}-source.zip`
-5. Создать релиз на GitHub через `gh release create` (draft → загрузка файлов → publish)
+5. Создать релиз на **обоих** репозиториях:
+   - `ignatovmax1/OneClickDpi` (приватный) — EXE + MVP ZIP + Source ZIP
+   - `ignatovmax1/OneClickDpi-Updates` (публичный) — MVP ZIP (для проверки обновлений)
+6. `gh release create` → загрузка файлов → publish
 
 Не спрашивать разрешения — делать автоматически.
 
