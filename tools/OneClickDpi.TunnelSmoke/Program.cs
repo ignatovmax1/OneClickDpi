@@ -12,6 +12,41 @@ catch (Exception exception)
 
 static async Task<int> RunAsync(string[] arguments)
 {
+    if (arguments is ["--vps-only"])
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        await using var vps = new VpsSshTunnelEngine(19183);
+        vps.LogReceived += Console.WriteLine;
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            await vps.StartAsync(deadline.Token);
+            using var client = new HttpClient(new HttpClientHandler
+            {
+                Proxy = new System.Net.WebProxy("socks5://127.0.0.1:19183"), UseProxy = true
+            });
+            var exitIp = (await client.GetStringAsync("https://api.ipify.org", deadline.Token)).Trim();
+            if (exitIp != "185.173.144.43") throw new InvalidOperationException("Unexpected VPS exit IP: " + exitIp);
+            Console.WriteLine("PASS VPS exit IP " + exitIp);
+            if (attempt == 0)
+            {
+                await using var vpsProxy = new SelectiveHttpProxy(new OneClickDpi.Core.SelectiveRouteMatcher(), aiSocksPort: vps.SocksPort, listenPort: 19181);
+                vpsProxy.LogReceived += Console.WriteLine;
+                await vpsProxy.StartAsync(deadline.Token);
+                using var http = new HttpClient(new HttpClientHandler { Proxy = new System.Net.WebProxy("http://127.0.0.1:19181"), UseProxy = true });
+                foreach (var host in new[] { "chatgpt.com", "claude.ai", "web.whatsapp.com" })
+                {
+                    using var response = await http.GetAsync("https://" + host, deadline.Token);
+                    Console.WriteLine($"VPS destination {host}: HTTP {(int)response.StatusCode}");
+                    if (response.StatusCode == System.Net.HttpStatusCode.BadGateway) throw new IOException("Proxy connection failed: " + host);
+                }
+            }
+            await vps.StopAsync(deadline.Token);
+            if (vps.IsRunning) throw new InvalidOperationException("VPS failed to stop");
+        }
+        Console.WriteLine("PASS VPS start/stop/restart and three selective routes");
+        return 0;
+    }
+
     if (arguments.Length == 3
         && arguments[0].Equals("--ai-only", StringComparison.Ordinal))
     {

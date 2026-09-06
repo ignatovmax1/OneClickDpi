@@ -215,11 +215,14 @@ static Task SelectiveTunnelMatchesOnlyTargets()
     Equal(SelectiveRoute.Ai, matcher.GetRoute("claude.ai"));
     True(matcher.ShouldTunnel("files.claudeusercontent.com"), "Claude files must use the tunnel.");
     True(matcher.ShouldTunnel("api.anthropic.com"), "Anthropic services must use the tunnel.");
-    True(matcher.ShouldTunnel("discord.com"), "Discord must use the AI tunnel when direct Gateway access fails.");
-    Equal(SelectiveRoute.Ai, matcher.GetRoute("gateway.discord.gg"));
+    True(matcher.ShouldTunnel("discord.com"), "Discord must use its configured tunnel route.");
+    Equal(SelectiveRoute.Tor, matcher.GetRoute("gateway.discord.gg"));
     True(matcher.ShouldTunnel("cdn.discordapp.com"), "Discord CDN must follow the Discord tunnel route.");
     Equal(SelectiveRoute.Tor, matcher.GetRoute("web.telegram.org"));
-    Equal(SelectiveRoute.Ai, matcher.GetRoute("discord.com"));
+    Equal(SelectiveRoute.Tor, matcher.GetRoute("discord.com"));
+    Equal(SelectiveRoute.Ai, matcher.GetRoute("web.whatsapp.com"));
+    Equal(SelectiveRoute.Ai, matcher.GetRoute("mmg.whatsapp.net"));
+    Equal(SelectiveRoute.Direct, matcher.GetRoute("whatsapp.com.example.com"));
     True(!matcher.ShouldTunnel("googlevideo.com"), "YouTube media must remain direct.");
     True(!matcher.ShouldTunnel("example.com"), "Unrelated traffic must remain direct.");
     True(!matcher.ShouldTunnel("notyoutube.com"), "Suffix matching must respect label boundaries.");

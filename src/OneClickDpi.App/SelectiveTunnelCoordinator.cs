@@ -93,7 +93,7 @@ public sealed class SelectiveTunnelCoordinator : IAsyncDisposable
                 _localProxy = new SelectiveHttpProxy(
                     _matcher,
                     socksPort: _tor.SocksPort,
-                    aiSocksPort: _vps.IsRunning ? _vps.SocksPort : _tor.SocksPort);
+                    aiSocksPort: _vps.SocksPort);
                 _localProxy.LogReceived += ForwardLog;
                 await _localProxy.StartAsync(cancellationToken).ConfigureAwait(false);
 
