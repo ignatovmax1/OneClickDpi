@@ -5,9 +5,9 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>OneClickDpi</AssemblyName>
     <RootNamespace>OneClickDpi.App</RootNamespace>
-    <Version>0.6.31</Version>
-    <FileVersion>0.6.31.0</FileVersion>
-    <AssemblyVersion>0.6.31.0</AssemblyVersion>
+    <Version>0.6.32</Version>
+    <FileVersion>0.6.32.0</FileVersion>
+    <AssemblyVersion>0.6.32.0</AssemblyVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Product>OneClick DPI</Product>
     <ApplicationIcon>Assets\appicon.ico</ApplicationIcon>
@@ -69,10 +69,6 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
-    <Content Include="Assets\appicon.ico">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <ExcludeFromSingleFile>false</ExcludeFromSingleFile>
-    </Content>
+    <Resource Include="Assets\appicon.ico" />
   </ItemGroup>
 </Project>
