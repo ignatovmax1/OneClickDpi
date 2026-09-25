@@ -1,0 +1,8 @@
+﻿<Solution>
+  <Project Path="src/HelloDpi.Core/HelloDpi.Core.csproj" />
+  <Project Path="src/HelloDpi.App/HelloDpi.App.csproj" />
+  <Project Path="tests/HelloDpi.Core.Tests/HelloDpi.Core.Tests.csproj" />
+  <Project Path="tools/HelloDpi.ReleaseTool/HelloDpi.ReleaseTool.csproj" />
+  <Project Path="tools/HelloDpi.TunnelSmoke/HelloDpi.TunnelSmoke.csproj" />
+  <Project Path="tools/HelloDpi.UpdateSmoke/HelloDpi.UpdateSmoke.csproj" />
+</Solution>

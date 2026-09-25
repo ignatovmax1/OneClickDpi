@@ -1,0 +1,10 @@
+Cygwin runtime licensing notice
+
+The Cygwin API library is covered by the GNU Lesser General Public License
+version 3 or later, with the Cygwin linking exception. The exception permits
+independent modules to link to the Cygwin library and be conveyed under terms
+of their choice without the requirements of LGPLv3 section 4.
+
+Full current terms: https://cygwin.com/licensing.html
+Source packages: https://cygwin.com/packages/summary/cygwin-src.html
+Bundled runtime version: 3.4.10

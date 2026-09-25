@@ -1,19 +1,19 @@
-# Project Instructions
+﻿# Project Instructions
 
 ## Auto-Release Rule
 
 После каждого изменения/исправления/добавления/доделки — автоматически без спроса:
 
-1. Обновить версию в `src/OneClickDpi.App/OneClickDpi.App.csproj` (бампать MINOR или PATCH)
+1. Обновить версию в `src/HelloDpi.App/HelloDpi.App.csproj` (бампать MINOR или PATCH)
 2. Закоммичить все изменения
 3. Запушить на GitHub
 4. Собрать релиз:
    - `dotnet publish` с `PublishSingleFile=true` для win-x64
-   - ZIP-пакет `OneClickDpi-MVP-{version}-win-x64.zip`
-   - Source ZIP `OneClickDpi-{version}-source.zip`
+   - ZIP-пакет `HelloDpi-MVP-{version}-win-x64.zip`
+   - Source ZIP `HelloDpi-{version}-source.zip`
 5. Создать релиз на **обоих** репозиториях:
-   - `ignatovmax1/OneClickDpi` (приватный) — EXE + MVP ZIP + Source ZIP
-   - `ignatovmax1/OneClickDpi-Updates` (публичный) — MVP ZIP (для проверки обновлений)
+   - `ignatovmax1/DeskMax` (приватный) — EXE + MVP ZIP + Source ZIP
+    - ``ignatovmax1/DeskMax`` (публичный) — MVP ZIP (для проверки обновлений)
 6. `gh release create` → загрузка файлов → publish
 
 Не спрашивать разрешения — делать автоматически.
@@ -22,20 +22,20 @@
 
 ```bash
 # Build
-dotnet build src/OneClickDpi.App/OneClickDpi.App.csproj
+dotnet build src/HelloDpi.App/HelloDpi.App.csproj
 
 # Test
-dotnet run --project tests/OneClickDpi.Core.Tests/OneClickDpi.Core.Tests.csproj
+dotnet run --project tests/HelloDpi.Core.Tests/HelloDpi.Core.Tests.csproj
 
 # Publish (release)
-dotnet publish src/OneClickDpi.App/OneClickDpi.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o <output-dir>
+dotnet publish src/HelloDpi.App/HelloDpi.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o <output-dir>
 ```
 
 ## Project Structure
 
-- `src/OneClickDpi.App/` — WPF приложение (главное)
-- `src/OneClickDpi.Core/` — ядро (модели, логика, пробы)
-- `tests/OneClickDpi.Core.Tests/` — тесты (console runner)
+- `src/HelloDpi.App/` — WPF приложение (главное)
+- `src/HelloDpi.Core/` — ядро (модели, логика, пробы)
+- `tests/HelloDpi.Core.Tests/` — тесты (console runner)
 - `tools/` — утилиты релиза
 
 ## Update Check System (PC + Android)
@@ -49,10 +49,10 @@ PC и Android синхронизированы — одна и та же лог�
 
 ## Server Ports
 
-- **UDP 443** — Hysteria2 для PC клиента (OneClickDpi)
+- **UDP 443** — Hysteria2 для PC клиента (HelloDpi)
 - **UDP 8443** — Hysteria2 для Android клиента (HelloDpi/Psiphon)
 - **TCP 1080** — danted (SOCKS5)
-- sing-box конфиг: `/etc/oneclickdpi-hy2/config.json`
+- sing-box конфиг: `/etc/HelloDpi-hy2/config.json`
 
 ## VPS
 

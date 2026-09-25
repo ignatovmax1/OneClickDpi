@@ -1,4 +1,4 @@
-OneClick DPI 0.6.5
+﻿HelloDpi DPI 0.6.5
 
 - Detects the real ChatGPT VPN rejection page instead of reporting its HTTP 403 as healthy.
 - Detects Claude's regional-unavailability page even when the server returns HTTP 200.

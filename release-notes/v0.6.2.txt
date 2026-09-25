@@ -1,4 +1,4 @@
-OneClick DPI 0.6.2
+﻿HelloDpi DPI 0.6.2
 
 - ChatGPT and Claude now use the selective local Tor/Snowflake tunnel.
 - Added automatic reachability checks and status cards for ChatGPT and Claude.

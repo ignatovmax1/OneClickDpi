@@ -1,0 +1,4 @@
+accounts.google.com
+drive.google.com
+docs.google.com
+mail.google.com

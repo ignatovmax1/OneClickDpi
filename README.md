@@ -1,4 +1,4 @@
-# OneClick DPI
+﻿# HelloDpi DPI
 
 Windows 10/11 prototype of a one-button hybrid DPI and selective tunnel client.
 It uses a typed strategy catalog, never executes BAT files, validates bundled
@@ -14,14 +14,14 @@ DPI path.
 ## Build
 
 ```powershell
-dotnet build OneClickDpi.slnx -c Release
-dotnet run --project tests/OneClickDpi.Core.Tests -c Release
-dotnet publish src/OneClickDpi.App -c Release -r win-x64 --self-contained true
+dotnet build HelloDpi.slnx -c Release
+dotnet run --project tests/HelloDpi.Core.Tests -c Release
+dotnet publish src/HelloDpi.App -c Release -r win-x64 --self-contained true
 ```
 
 Starting with version 0.6.1, the published GUI contains its runtime components
 as embedded resources and safely extracts or repairs them under the user's local
-application-data directory. `OneClickDpi.exe` can therefore be moved and run by
+application-data directory. `HelloDpi.exe` can therefore be moved and run by
 itself. Windows will ask for administrator permission because WinDivert requires
 elevated privileges.
 

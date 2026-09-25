@@ -1,4 +1,4 @@
-OneClick DPI 0.6.4
+﻿HelloDpi DPI 0.6.4
 
 - Fixes the GUI remaining on the connection screen when an AI route never becomes ready.
 - Starts Tor and Psiphon concurrently to reduce connection time.
